@@ -1,16 +1,14 @@
 """
-ASGI config for config project.
+ASGI config for the HR Assistant project.
 
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/6.1/howto/deployment/asgi/
+Set DJANGO_SETTINGS_MODULE=config.django.production in the deployment
+environment. The local settings module is only the safe development default.
 """
 
 import os
 
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.django.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.django.local")
 
 application = get_asgi_application()
