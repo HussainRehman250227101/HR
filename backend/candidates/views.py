@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import exceptions, permissions, status, viewsets
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -49,8 +50,15 @@ def _save_resume(candidate,upload,actor,content_type,checksum=None):
     return doc
 
 
+class CandidatePagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
 class CandidateViewSet(viewsets.ModelViewSet):
     serializer_class=CandidateSerializer
+    pagination_class=CandidatePagination
     lookup_field="public_id"
     http_method_names=["get","post","put","patch","head","options"]
     parser_classes=[JSONParser,MultiPartParser,FormParser]
