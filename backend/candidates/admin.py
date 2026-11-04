@@ -33,3 +33,12 @@ class CandidateEventAdmin(admin.ModelAdmin):
     list_display=("candidate","event_type","actor","created_at")
     list_filter=("event_type","created_at")
     readonly_fields=("candidate","actor","event_type","details","created_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
