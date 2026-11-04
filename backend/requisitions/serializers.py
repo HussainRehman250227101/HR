@@ -1,5 +1,7 @@
 """API serializers for requisition data."""
 
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from accounts.models import User, UserRole
@@ -22,7 +24,8 @@ class RequisitionSerializer(serializers.ModelSerializer):
         max_length=50,
     )
     minimum_experience_years = serializers.DecimalField(
-        max_digits=4, decimal_places=1, min_value=0
+        max_digits=4, decimal_places=1, min_value=0,
+        required=False, default=Decimal("0.0"),
     )
     salary_min = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True
@@ -30,7 +33,7 @@ class RequisitionSerializer(serializers.ModelSerializer):
     salary_max = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=0, required=False, allow_null=True
     )
-    headcount = serializers.IntegerField(min_value=1)
+    headcount = serializers.IntegerField(min_value=1, required=False, default=1)
 
     class Meta:
         model = Requisition
