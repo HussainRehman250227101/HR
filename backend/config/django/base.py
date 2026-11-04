@@ -8,8 +8,8 @@ env.read_env(BASE_DIR / ".env", overwrite=False)
 
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
-CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[]) # type:ignore
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[]) # type:ignore
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "accounts.apps.AccountsConfig",
+    "requisitions.apps.RequisitionsConfig",
 ]
 
 MIDDLEWARE = [
@@ -49,7 +50,7 @@ ASGI_APPLICATION = "config.asgi.application"
 
 DATABASES = {"default": {
     "ENGINE": "django.db.backends.sqlite3",
-    "NAME": Path(env("SQLITE_DB_PATH", default=str(BASE_DIR / "db.sqlite3"))),
+    "NAME": Path(env("SQLITE_DB_PATH", default=str(BASE_DIR / "db.sqlite3"))), # type:ignore
     "CONN_MAX_AGE": 0,
 }}
 
@@ -61,8 +62,8 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
-LANGUAGE_CODE = env("LANGUAGE_CODE", default="en-us")
-TIME_ZONE = env("TIME_ZONE", default="UTC")
+LANGUAGE_CODE = env("LANGUAGE_CODE", default="en-us") # type:ignore
+TIME_ZONE = env("TIME_ZONE", default="UTC") # type:ignore
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = "static/"
@@ -82,13 +83,13 @@ SECURE_HSTS_SECONDS = 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 SECURE_HSTS_PRELOAD = False
 
-EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
-EMAIL_HOST = env("EMAIL_HOST", default="")
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend") # type:ignore
+EMAIL_HOST = env("EMAIL_HOST", default="") # type:ignore
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
-EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
-EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@example.invalid")
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="") # type:ignore
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="") # type:ignore
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@example.invalid") # type:ignore
 EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=10)
 
 REST_FRAMEWORK = {
@@ -106,15 +107,15 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": __import__("datetime").timedelta(minutes=10),
-    "REFRESH_TOKEN_LIFETIME": __import__("datetime").timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": __import__("datetime").timedelta(days=10),
+    "REFRESH_TOKEN_LIFETIME": __import__("datetime").timedelta(days=10),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
     "UPDATE_LAST_LOGIN": False,
 }
 
-LOG_LEVEL = env("LOG_LEVEL", default="INFO").upper()
+LOG_LEVEL = env("LOG_LEVEL", default="INFO").upper() # type:ignore
 LOGGING = {
     "version": 1, "disable_existing_loggers": False,
     "formatters": {"standard": {"format": "{asctime} {levelname} {name}: {message}", "style": "{"}},
