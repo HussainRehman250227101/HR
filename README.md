@@ -1,33 +1,31 @@
 # AI-Powered HR Hiring Assistant
 
-A human-supervised hiring workflow that coordinates three specialized agents:
+A human-supervised hiring workflow with three specialized agents: resume scoring, candidate screening calls, and interview scheduling/invitations.
 
-1. **Resume Scoring Agent** — evaluates resumes against an approved, job-related rubric and provides evidence-based recommendations.
-2. **Candidate Screening Call Agent** — conducts consent-aware, structured candidate screening.
-3. **Interview Scheduling & Invitation Agent** — coordinates interview availability and sends invitations only after explicit HR approval.
+## Architecture and delivery
 
-This is a decision-support and workflow-automation application. It does not make autonomous hiring or rejection decisions.
+The project is developed in 15 independently tested modules. The backend is Django, the frontend React + TypeScript, orchestration LangGraph, and local development uses SQLite before the planned PostgreSQL migration. Azure GPT-5 mini is the configured LLM deployment. Pakistan (+92) is the current calling destination.
 
-## Project status
+## Module 02 — Authentication & RBAC
 
-The project is being delivered in 15 independently testable modules. See the project SRS for functional requirements, candidate lifecycle states, acceptance criteria, privacy requirements, and responsible-AI controls.
+Roles:
+- **ADMIN**: HR Administrator (Django staff/superuser permissions remain separate).
+- **RECRUITER**: HR Recruiter.
+- **HIRING_MANAGER**: Hiring Manager.
 
-### Architecture decisions
+JWT endpoints:
+- `POST /api/v1/auth/token/` — obtain access and refresh tokens.
+- `POST /api/v1/auth/token/refresh/` — refresh access token.
+- `POST /api/v1/auth/logout/` — blacklist refresh token.
+- `GET /api/v1/auth/me/` — authenticated user profile.
 
-- Frontend: React + TypeScript + Vite.
-- Backend: Django; REST endpoints and API authentication are introduced in a later module.
-- Workflow orchestration: LangGraph, with explicit persisted states and human approval gates.
-- Initial database: SQLite for local development; PostgreSQL is the target database for the later migration.
-- Initial LLM: the project's Azure-hosted GPT-4.1 mini deployment. The exact Azure deployment name is configuration, not a hard-coded model identifier.
-- Candidate calling: a real voice/telephony integration is planned. The provider and destination-country coverage must be confirmed before the calling integration module.
-- Email and calendar integrations must use approved credentials and must not send candidate communications without the required HR approval.
+Role permissions are reusable classes in `accounts/permissions.py`. All API endpoints default to authenticated access. Django admin access is separately controlled by Django's staff/superuser flags.
 
 ## Backend setup (Windows PowerShell)
 
-Use Python 3.12 or another Python version supported by the pinned Django release.
+Use Python 3.12 and run from `backend`:
 
 ```powershell
-cd backend
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -35,44 +33,47 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Generate a development secret key:
+Set a locally generated `SECRET_KEY` in `.env`. Never commit secrets.
+
+### Module 02 first migration (SQLite only)
+
+This module introduces `AUTH_USER_MODEL=accounts.User`. Django custom user models must be present before the initial auth migrations. If you have only the disposable Module 01 SQLite database, remove it and rebuild:
 
 ```powershell
-python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-```
-
-Put the generated value in `backend/.env` as `SECRET_KEY`. Do not commit `.env` or share its contents.
-
-Run the backend checks and migrations:
-
-```powershell
-python manage.py check
+Remove-Item .\db.sqlite3 -ErrorAction SilentlyContinue
+python manage.py makemigrations accounts
 python manage.py migrate
+python manage.py createsuperuser
+python manage.py check
+python manage.py test accounts
 python manage.py runserver
 ```
 
-The development settings module is selected by default. To use production settings, set `DJANGO_SETTINGS_MODULE=config.django.production` in the deployment environment and provide the required production environment variables. Never use development settings in a production deployment.
+Do not delete a database containing valuable data. For a database with data, plan a dedicated user-model migration instead of resetting it.
 
-## Frontend setup
+## API usage
 
-In a separate terminal:
+Login:
+```http
+POST /api/v1/auth/token/
+Content-Type: application/json
 
-```powershell
-cd frontend
-npm install
-npm run dev
+{"username":"your_username","password":"your_password"}
 ```
 
-The frontend is currently the Vite starter application. Application screens and API integration are delivered in later modules.
+Authenticated profile:
+```http
+GET /api/v1/auth/me/
+Authorization: Bearer <access_token>
+```
 
-## Environment configuration
+Logout:
+```http
+POST /api/v1/auth/logout/
+Authorization: Bearer <access_token>
+Content-Type: application/json
 
-See [backend/.env.example](backend/.env.example) for the complete list of configuration keys. Azure credentials are optional until the LLM integration module is implemented. Use the **exact deployment name** configured in Azure for `AZURE_OPENAI_CHAT_DEPLOYMENT`; it may differ from the underlying model name.
+{"refresh":"<refresh_token>"}
+```
 
-## Security and privacy baseline
-
-- Secrets belong in environment variables or an approved secret manager.
-- Use synthetic or consented test data during development.
-- Resume files, transcripts, and candidate communications are untrusted input.
-- Do not log full resumes, candidate contact details, full transcripts, or credentials.
-- Human review is mandatory before screening progression and interview invitation delivery.
+Use HTTPS in production, protect refresh tokens, rotate secrets, and never store tokens in source control. The frontend token-storage strategy will be designed in its dedicated frontend/auth integration work rather than assuming localStorage is secure.
