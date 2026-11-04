@@ -77,3 +77,42 @@ Content-Type: application/json
 ```
 
 Use HTTPS in production, protect refresh tokens, rotate secrets, and never store tokens in source control. The frontend token-storage strategy will be designed in its dedicated frontend/auth integration work rather than assuming localStorage is secure.
+
+
+## Module 03 — Requisition Management
+
+The requisitions API manages job requests before candidate intake. It includes a UUID reference, role title, department, location, employment type, work mode, job description, responsibilities, required skills, minimum experience, education requirements, optional salary range/currency, headcount, hiring manager, target close date, status, and system timestamps.
+
+Lifecycle statuses are **DRAFT**, **OPEN**, **ON_HOLD**, and **CLOSED**. A closed requisition cannot be reopened. Only draft requisitions can be deleted; active roles should be closed rather than deleted. The API records the opening/closing timestamp when the status changes.
+
+Access:
+- **HR Administrator / superuser:** read and manage all requisitions.
+- **HR Recruiter:** read and manage all requisitions.
+- **Hiring Manager:** read only requisitions assigned to that manager.
+- Anonymous users: no access.
+
+Endpoints under `/api/v1/requisitions/`:
+- `GET /` — paginated list; optional `status`, `department`, and `search` filters.
+- `POST /` — create a draft requisition (or explicitly create with another allowed status).
+- `GET /<reference_code>/` — retrieve.
+- `PUT/PATCH /<reference_code>/` — update, subject to role and lifecycle rules.
+- `DELETE /<reference_code>/` — delete draft requisitions only.
+
+### Module 03 database migrations
+
+The Module 02 custom user model was added before its generated initial migration was committed. Generate and commit both initial migration files on the Module 03 feature branch:
+
+```powershell
+python manage.py makemigrations accounts requisitions
+python manage.py migrate --fake-initial
+python manage.py makemigrations --check --dry-run
+```
+
+`--fake-initial` supports both cases: a fresh database (where the tables are created) and a local Module 02 database whose accounts table was previously created before the initial migration file existed (where Django recognizes and records the existing initial table). Back up any important database before running migrations.
+
+Run tests with:
+
+```powershell
+python manage.py check
+python manage.py test accounts requisitions
+```
