@@ -195,3 +195,18 @@ RESUME_MAX_BATCH_TOTAL_MB=50
 ```
 
 Never commit `.env` or real candidate resumes. Use synthetic or consented test data. Set an approved retention/deletion policy, HTTPS, encrypted storage and malware scanning before production use.
+
+
+### Verifying Modules 04–06 locally
+
+From `backend`, after installing `requirements.txt`, generate the candidate schema migration and apply it:
+
+```powershell
+python manage.py makemigrations candidates
+python manage.py migrate
+python manage.py makemigrations --check --dry-run
+python manage.py check
+python manage.py test accounts requisitions candidates llm
+```
+
+The Azure connectivity test is an explicit live request and is not called during automated tests. Use `GET /api/v1/ai/status/` to check configuration first, then `POST /api/v1/ai/test/` only when you intend to consume model quota.
