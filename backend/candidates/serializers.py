@@ -1,4 +1,4 @@
-"""Candidate and private resume API serializers."""
+"""Candidate, resume and browsable batch-upload serializers."""
 
 from rest_framework import serializers
 
@@ -61,9 +61,22 @@ class CandidateSerializer(serializers.ModelSerializer):
 
 
 class ResumeUploadSerializer(serializers.Serializer):
-    file = serializers.FileField()
+    file = serializers.FileField(help_text="Select one PDF or DOCX resume.")
 
     def validate_file(self, value):
+        validate_resume_upload(value)
+        return value
+
+
+class ResumeBatchUploadSerializer(serializers.Serializer):
+    # Browsable API file picker. Submit once per resume; batch API clients can send repeated parts.
+    files = serializers.FileField(
+        required=False,
+        allow_empty_file=False,
+        help_text="Select one PDF or DOCX file. Submit once per resume in the browsable API.",
+    )
+
+    def validate_files(self, value):
         validate_resume_upload(value)
         return value
 

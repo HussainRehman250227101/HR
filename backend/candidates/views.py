@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import exceptions, permissions, status, viewsets
+from rest_framework.generics import GenericAPIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
@@ -17,7 +18,7 @@ from accounts.models import UserRole
 from accounts.permissions import IsRecruiterOrAdmin
 from requisitions.models import Requisition, RequisitionStatus
 from .models import Candidate, CandidateEvent, CandidateStatus, ResumeDocument, ResumeProcessingStatus
-from .serializers import CandidateEventSerializer, CandidateSerializer, ResumeDocumentDetailSerializer, ResumeDocumentSummarySerializer, ResumeUploadSerializer
+from .serializers import CandidateEventSerializer, CandidateSerializer, ResumeBatchUploadSerializer, ResumeDocumentDetailSerializer, ResumeDocumentSummarySerializer, ResumeUploadSerializer
 from .services.processing import process_resume_document, queue_resume_retry
 from .validators import calculate_sha256, safe_filename, validate_resume_upload
 
@@ -95,9 +96,10 @@ class CandidateViewSet(viewsets.ModelViewSet):
             CandidateEvent.objects.create(candidate=candidate,actor=self.request.user,event_type=CandidateEvent.EventType.CANDIDATE_UPDATED,details={"changed_fields":changed})
 
 
-class CandidateResumeUploadView(APIView):
+class CandidateResumeUploadView(GenericAPIView):
     parser_classes=[MultiPartParser,FormParser]
     permission_classes=[IsRecruiterOrAdmin]
+    serializer_class=ResumeUploadSerializer
 
     def post(self,request,public_id):
         candidate=get_object_or_404(Candidate.objects.select_related("requisition"),public_id=public_id)
@@ -105,7 +107,7 @@ class CandidateResumeUploadView(APIView):
             raise exceptions.ValidationError("Resumes can only be added to candidates for open requisitions.")
         if candidate.current_status == CandidateStatus.CLOSED:
             raise exceptions.ValidationError("A closed candidate record cannot accept another resume.")
-        serializer=ResumeUploadSerializer(data=request.data)
+        serializer=self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         upload=serializer.validated_data["file"]
         content_type=validate_resume_upload(upload)
@@ -121,9 +123,10 @@ class CandidateResumeUploadView(APIView):
         return Response(ResumeDocumentSummarySerializer(document).data,status=status.HTTP_201_CREATED)
 
 
-class RequisitionResumeBatchUploadView(APIView):
+class RequisitionResumeBatchUploadView(GenericAPIView):
     parser_classes=[MultiPartParser,FormParser]
     permission_classes=[IsRecruiterOrAdmin]
+    serializer_class=ResumeBatchUploadSerializer
 
     def get(self,request,reference_code):
         # Enables the DRF Browsable API to render its multipart POST form.
@@ -132,6 +135,8 @@ class RequisitionResumeBatchUploadView(APIView):
 
     def post(self,request,reference_code):
         requisition=get_object_or_404(Requisition,reference_code=reference_code,status=RequisitionStatus.OPEN)
+        form_serializer=self.get_serializer(data=request.data)
+        form_serializer.is_valid(raise_exception=True)
         uploads=request.FILES.getlist("files") or request.FILES.getlist("file")
         if not uploads:
             raise exceptions.ValidationError({"files":"Upload one or more PDF/DOCX files using the 'files' field."})

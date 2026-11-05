@@ -210,3 +210,16 @@ python manage.py test accounts requisitions candidates llm
 ```
 
 The Azure connectivity test is an explicit live request and is not called during automated tests. Use `GET /api/v1/ai/status/` to check configuration first, then `POST /api/v1/ai/test/` only when you intend to consume model quota.
+
+
+### Using resume upload from the DRF Browsable API
+
+The batch endpoint has a serializer-backed multipart form. Open it in the browser while authenticated as an HR Administrator or Recruiter:
+
+`GET /api/v1/candidates/requisition/<OPEN_REQUISITION_UUID>/resume-batches/`
+
+The browsable API displays a file picker named `files`. Select one PDF/DOCX resume and press **POST**. For the browsable form, submit one resume per request; repeat for each file. API clients can submit repeated multipart `files` parts in one request to use the batch limit.
+
+To find a valid UUID, open `GET /api/v1/requisitions/` and copy the `reference_code` of a requisition whose status is exactly `OPEN`. Draft, on-hold, closed, or unknown requisition UUIDs are not eligible for candidate intake and return 404. The UUID in the browser address bar must be the requisition reference code, not a candidate ID or database integer ID.
+
+The endpoint accepts multipart form data, not a pasted path or raw JSON. The candidate resume endpoint also renders a file picker at `POST /api/v1/candidates/<CANDIDATE_UUID>/resumes/`.

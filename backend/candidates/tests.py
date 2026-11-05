@@ -153,6 +153,21 @@ class CandidateAndResumeAPITests(APITestCase):
         response=self.client.get(reverse("candidates:resume-document-download",args=[doc.public_id]))
         self.assertEqual(response.status_code,status.HTTP_403_FORBIDDEN)
 
+
+    def test_batch_upload_browsable_page_renders_file_picker_for_open_requisition(self):
+        url=reverse("candidates:requisition-resume-batch-upload",args=[self.requisition.reference_code])
+        response=self.client.get(url,HTTP_ACCEPT="text/html")
+        self.assertEqual(response.status_code,status.HTTP_200_OK)
+        self.assertContains(response,"multipart/form-data")
+        self.assertContains(response,'type="file"')
+
+    def test_batch_upload_browsable_page_rejects_non_open_requisition(self):
+        self.requisition.status=RequisitionStatus.CLOSED
+        self.requisition.save(update_fields=("status",))
+        url=reverse("candidates:requisition-resume-batch-upload",args=[self.requisition.reference_code])
+        response=self.client.get(url,HTTP_ACCEPT="text/html")
+        self.assertEqual(response.status_code,status.HTTP_404_NOT_FOUND)
+
     def test_processing_is_idempotent_for_completed_document(self):
         candidate=self.create_candidate()
         self.client.post(self.upload_url(candidate),{"file":make_docx()},format="multipart")
