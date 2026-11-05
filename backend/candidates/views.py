@@ -125,6 +125,11 @@ class RequisitionResumeBatchUploadView(APIView):
     parser_classes=[MultiPartParser,FormParser]
     permission_classes=[IsRecruiterOrAdmin]
 
+    def get(self,request,reference_code):
+        # Enables the DRF Browsable API to render its multipart POST form.
+        requisition=get_object_or_404(Requisition,reference_code=reference_code,status=RequisitionStatus.OPEN)
+        return Response({"detail":"Use the multipart POST form below to upload one or more PDF/DOCX resumes.","requisition_reference":str(requisition.reference_code),"upload_field":"files (multiple files allowed)"})
+
     def post(self,request,reference_code):
         requisition=get_object_or_404(Requisition,reference_code=reference_code,status=RequisitionStatus.OPEN)
         uploads=request.FILES.getlist("files") or request.FILES.getlist("file")
