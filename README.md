@@ -223,3 +223,108 @@ The browsable API displays a file picker named `files`. Select one PDF/DOCX resu
 To find a valid UUID, open `GET /api/v1/requisitions/` and copy the `reference_code` of a requisition whose status is exactly `OPEN`. Draft, on-hold, closed, or unknown requisition UUIDs are not eligible for candidate intake and return 404. The UUID in the browser address bar must be the requisition reference code, not a candidate ID or database integer ID.
 
 The endpoint accepts multipart form data, not a pasted path or raw JSON. The candidate resume endpoint also renders a file picker at `POST /api/v1/candidates/<CANDIDATE_UUID>/resumes/`.
+
+
+## Modules 07–09 — Resume Scoring, Recruiter Review and Workflow Orchestration
+
+### Module 07 — Explainable Resume Scoring Agent
+
+The scoring agent evaluates only job-related evidence against the requisition. The default SRS rubric is configurable per requisition and totals 100%:
+
+| Criterion | Default weight |
+|---|---:|
+| Required skills | 40% |
+| Relevant experience | 25% |
+| Role-related projects | 20% |
+| Education and certifications | 10% |
+| Other explicitly job-related evidence | 5% |
+
+The model returns a structured assessment for every criterion, including an evidence status, rationale, short resume excerpt, and missing/unclear items. The application computes the weighted score; the model does not calculate the final total.
+
+**Missing-information handling:** criteria marked NOT_FOUND or UNCLEAR are excluded from the weighted denominator rather than treated as proof that the candidate lacks the skill. The result records the assessed weight and an evidence-coverage confidence level. When no criterion has assessable evidence, `overall_score` is `null` (not a fabricated zero) and the recommendation requires manual review.
+
+The scoring prompt excludes candidate name/contact fields, treats resume content as untrusted, and prohibits protected-trait or personality inference. The score is a recruiter prioritization aid only—not an automatic rejection or hiring decision.
+
+Rubric endpoints:
+- `GET /api/v1/scoring/requisitions/<requisition_uuid>/rubric/`
+- `PUT /api/v1/scoring/requisitions/<requisition_uuid>/rubric/`
+
+Evaluation endpoints:
+- `POST /api/v1/scoring/candidates/<candidate_uuid>/evaluate/`
+- `GET /api/v1/scoring/candidates/<candidate_uuid>/evaluations/`
+- `GET /api/v1/scoring/evaluations/<evaluation_uuid>/`
+
+Evaluation history is immutable and versioned per resume. It records the selected rubric/version, criterion scores, evidence excerpts, missing information, warnings, assessed-weight coverage, confidence, deployment name, prompt version and input hash. Human score overrides are not written back to the AI evaluation.
+
+### Module 08 — Recruiter Review & Shortlisting
+
+The shortlist queue is available at `GET /api/v1/reviews/shortlist/`. A recruiter can explicitly:
+- Approve a candidate for screening.
+- Decline a candidate (a reason is mandatory).
+- Hold a candidate for manual review.
+- Record a manual score override, separately from the AI score, with a mandatory explanation.
+
+Decision endpoint:
+- `POST /api/v1/reviews/candidates/<candidate_uuid>/shortlist/`
+
+Review history:
+- `GET /api/v1/reviews/candidates/<candidate_uuid>/history/`
+
+Only HR Administrator and Recruiter roles can make shortlist decisions. Hiring Managers can read evaluations for requisitions assigned to them but cannot approve, decline, or override a shortlist. Decisions are append-only audit records and each decision must reference the candidate's latest evaluation.
+
+Batch-upload placeholder candidates cannot be approved until a recruiter confirms identity, enters a candidate name and at least one contact method, and records why identity/contact information was verified. The original AI score remains unchanged when a human override is stored.
+
+### Module 09 — LangGraph Workflow Orchestration
+
+The first LangGraph workflow coordinates:
+1. Validate the candidate and completed resume.
+2. Execute the resume scoring agent.
+3. Persist the evaluation.
+4. Pause at a checkpoint waiting for recruiter shortlist review.
+5. Resume only after the Module 08 review decision is durably saved.
+6. Complete the scoring/shortlist workflow stage.
+
+The workflow uses LangGraph `interrupt()` and `Command(resume=...)` with a persistent SQLite checkpointer for local development. WorkflowRun records store candidate, resume, evaluation, thread ID, state summary, status, error code and timestamps. The SQLite checkpoint file is local runtime state and is excluded from Git.
+
+Workflow endpoints:
+- `POST /api/v1/workflows/candidates/<candidate_uuid>/start-scoring/`
+- `GET /api/v1/workflows/<workflow_run_uuid>/`
+- `POST /api/v1/workflows/<workflow_run_uuid>/resume/` — retries resumption after a saved HR decision if a transient error interrupted it.
+
+The SQLite checkpointer is intended for local development and lightweight prototype execution. For multi-worker production deployment, move LangGraph checkpoint storage to PostgreSQL and use a managed worker/process supervisor. Candidate communication, calling, and scheduling are not performed by this workflow.
+
+### Planned Module 10 voice-provider decision
+
+The candidate screening module will use **Twilio for telephony/call control** and **ElevenLabs Conversational AI for the voice agent**. Provider credentials and call initiation will be implemented in Module 10, not in the scoring workflow. Calls must remain behind recruiter approval and candidate consent checks. The integration can use ElevenLabs' native Twilio-number integration, or its register-call approach when custom Twilio call control is required.
+
+### Install and verify Modules 07–09
+
+```powershell
+pip install -r requirements.txt
+python manage.py makemigrations candidates scoring reviews workflows
+python manage.py migrate
+python manage.py makemigrations --check --dry-run
+python manage.py check
+python manage.py test accounts requisitions candidates llm scoring reviews workflows
+```
+
+The scoring API requires a configured Azure GPT-5 mini deployment. The LangGraph workflow uses the local SQLite checkpoint file and does not call Twilio or ElevenLabs.
+
+
+### Requisition context fields added for Modules 07–10
+
+Requisitions now also accept optional `preferred_skills` and `screening_questions` lists (up to 50 preferred skills and 30 questions). The scoring agent receives preferred skills as contextual information without treating them as mandatory skills. Screening questions will be made available to the Module 10 screening workflow. These fields do not create automatic rejection rules.
+
+
+### Testing Module 07–09 in the DRF Browsable API
+
+Use ModHeader to attach your recruiter JWT to the local DRF pages.
+
+1. Inspect the rubric: `GET /api/v1/scoring/requisitions/<requisition_uuid>/rubric/`.
+2. Run scoring: `POST /api/v1/scoring/candidates/<candidate_uuid>/evaluate/`. The optional `resume_document` form field accepts a resume-document UUID; leave it blank to use the latest completed resume.
+3. Start the full scoring workflow: `POST /api/v1/workflows/candidates/<candidate_uuid>/start-scoring/`. No request body is required. The response should be `WAITING_HR_REVIEW` after scoring and checkpoint creation.
+4. Review the queue: `GET /api/v1/reviews/shortlist/`.
+5. Record the decision: `POST /api/v1/reviews/candidates/<candidate_uuid>/shortlist/`. The `evaluation` field expects the evaluation's public UUID (not its integer database ID). Choose a decision and provide the required reason. A score override and its reason are optional; identity verification fields are required only for placeholder candidates.
+6. Inspect workflow state: `GET /api/v1/workflows/<workflow_run_uuid>/`. After a saved recruiter decision, the workflow should be `COMPLETED`. A failed resume after an already-saved decision can be retried using `POST /api/v1/workflows/<workflow_run_uuid>/resume/`.
+
+Do not merge the feature branch until local migrations and the full test suite pass.

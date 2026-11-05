@@ -16,3 +16,6 @@ frontend/node_modules/
 frontend/dist/
 frontend/.env*
 !frontend/.env.example
+
+# LangGraph local checkpoint state (never commit workflow state)
+backend/langgraph-checkpoints.sqlite3*
