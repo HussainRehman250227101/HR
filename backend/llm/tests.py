@@ -55,7 +55,7 @@ class AzureOpenAIProviderTests(SimpleTestCase):
 class LLMEndpointTests(SimpleTestCase):
     def setUp(self):
         self.factory=APIRequestFactory()
-        self.admin=SimpleNamespace(is_authenticated=True,is_superuser=False,role=UserRole.ADMIN)
+        self.admin=SimpleNamespace(pk=1,is_authenticated=True,is_superuser=False,role=UserRole.ADMIN)
 
     @override_settings(AZURE_OPENAI_ENDPOINT="",AZURE_OPENAI_API_KEY="",AZURE_OPENAI_CHAT_DEPLOYMENT="",AZURE_OPENAI_TIMEOUT_SECONDS=30,AZURE_OPENAI_MAX_RETRIES=2)
     def test_status_does_not_expose_secret(self):
