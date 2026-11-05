@@ -22,6 +22,8 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "accounts.apps.AccountsConfig",
     "requisitions.apps.RequisitionsConfig",
+    "candidates.apps.CandidatesConfig",
+    "llm.apps.LLMConfig",
 ]
 
 MIDDLEWARE = [
@@ -114,6 +116,26 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
     "UPDATE_LAST_LOGIN": False,
 }
+
+
+# Azure OpenAI v1 client controls. Secrets remain in backend/.env only.
+AZURE_OPENAI_ENDPOINT = env("AZURE_OPENAI_ENDPOINT", default="") # type:ignore
+AZURE_OPENAI_API_KEY = env("AZURE_OPENAI_API_KEY", default="") # type:ignore
+AZURE_OPENAI_CHAT_DEPLOYMENT = env("AZURE_OPENAI_CHAT_DEPLOYMENT", default="") # type:ignore
+AZURE_OPENAI_TIMEOUT_SECONDS = env.int("AZURE_OPENAI_TIMEOUT_SECONDS", default=30)
+AZURE_OPENAI_MAX_RETRIES = env.int("AZURE_OPENAI_MAX_RETRIES", default=2)
+AZURE_OPENAI_REASONING_EFFORT = env("AZURE_OPENAI_REASONING_EFFORT", default="low") # type:ignore
+AZURE_OPENAI_MAX_COMPLETION_TOKENS = env.int("AZURE_OPENAI_MAX_COMPLETION_TOKENS", default=2000)
+
+# Private resume upload limits and Django multipart request limits.
+RESUME_MAX_FILE_SIZE_MB = env.int("RESUME_MAX_FILE_SIZE_MB", default=10)
+RESUME_MAX_FILE_SIZE_BYTES = RESUME_MAX_FILE_SIZE_MB * 1024 * 1024
+RESUME_MAX_BATCH_FILES = env.int("RESUME_MAX_BATCH_FILES", default=20)
+RESUME_MAX_BATCH_TOTAL_MB = env.int("RESUME_MAX_BATCH_TOTAL_MB", default=50)
+RESUME_MAX_BATCH_TOTAL_BYTES = RESUME_MAX_BATCH_TOTAL_MB * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = RESUME_MAX_BATCH_TOTAL_BYTES + (1024 * 1024)
+FILE_UPLOAD_PERMISSIONS = 0o640
 
 LOG_LEVEL = env("LOG_LEVEL", default="INFO").upper() # type:ignore
 LOGGING = {
