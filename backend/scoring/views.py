@@ -1,23 +1,29 @@
-"""Scoring endpoints for recruiter-run evaluations and immutable rubric versions."""
+"""Serializer-backed scoring endpoints for the DRF Browsable API."""
 
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import exceptions, permissions, status
+from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from accounts.permissions import IsRecruiterOrAdmin
 from candidates.models import Candidate
 from llm.exceptions import LLMConfigurationError, LLMProviderError
 from requisitions.models import Requisition
-from .models import ResumeEvaluation, ScoringRubric
-from .serializers import EvaluationDetailSerializer, EvaluationListSerializer, EvaluationRequestSerializer, ScoringRubricSerializer
+from .models import ScoringRubric
+from .serializers import (
+    EvaluationDetailSerializer,
+    EvaluationListSerializer,
+    EvaluationRequestSerializer,
+    ScoringRubricSerializer,
+)
 from .services.agent import evaluate_candidate_resume
 from .services.rubrics import get_or_create_rubric
 
 
-class RequisitionRubricView(APIView):
+class RequisitionRubricView(GenericAPIView):
     permission_classes = [IsRecruiterOrAdmin]
+    serializer_class = ScoringRubricSerializer
 
     def get(self, request, reference_code):
         requisition = get_object_or_404(Requisition, reference_code=reference_code)
@@ -27,7 +33,7 @@ class RequisitionRubricView(APIView):
     def put(self, request, reference_code):
         requisition = get_object_or_404(Requisition, reference_code=reference_code)
         current = get_or_create_rubric(requisition)
-        serializer = ScoringRubricSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         with transaction.atomic():
@@ -45,12 +51,13 @@ class RequisitionRubricView(APIView):
         return Response(ScoringRubricSerializer(rubric).data)
 
 
-class CandidateEvaluationView(APIView):
+class CandidateEvaluationView(GenericAPIView):
     permission_classes = [IsRecruiterOrAdmin]
+    serializer_class = EvaluationRequestSerializer
 
     def post(self, request, candidate_id):
         candidate = get_object_or_404(Candidate, public_id=candidate_id)
-        serializer = EvaluationRequestSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
             evaluation = evaluate_candidate_resume(
@@ -61,11 +68,13 @@ class CandidateEvaluationView(APIView):
         except ValueError as exc:
             raise exceptions.ValidationError({"detail": str(exc)}) from exc
         except (LLMConfigurationError, LLMProviderError) as exc:
-            raise exceptions.APIException("The scoring provider could not complete this evaluation. Check Azure configuration and retry later.") from exc
+            raise exceptions.APIException(
+                "The scoring provider could not complete this evaluation. Check Azure configuration and retry later."
+            ) from exc
         return Response(EvaluationDetailSerializer(evaluation).data, status=status.HTTP_201_CREATED)
 
 
-class CandidateEvaluationHistoryView(APIView):
+class CandidateEvaluationHistoryView(GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, candidate_id):
@@ -85,10 +94,12 @@ class CandidateEvaluationHistoryView(APIView):
         return Response(EvaluationListSerializer(evaluations, many=True).data)
 
 
-class EvaluationDetailView(APIView):
+class EvaluationDetailView(GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, public_id):
+        from .models import ResumeEvaluation
+
         evaluation = get_object_or_404(
             ResumeEvaluation.objects.select_related("candidate", "requisition", "resume_document", "rubric"),
             public_id=public_id,

@@ -3,11 +3,12 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import exceptions, permissions, status
+from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from accounts.permissions import IsRecruiterOrAdmin
 from candidates.models import Candidate, CandidateEvent, CandidateStatus
+from scoring.models import ResumeEvaluation
 from scoring.serializers import EvaluationListSerializer
 from workflows.models import WorkflowRun, WorkflowRunStatus
 from workflows.services import resume_workflow_after_review
@@ -18,7 +19,7 @@ from .serializers import ShortlistDecisionRequestSerializer, ShortlistReviewSeri
 REVIEWABLE_STATUSES = {CandidateStatus.SCORED_HR_REVIEW, CandidateStatus.NEEDS_MANUAL_REVIEW}
 
 
-class ShortlistQueueView(APIView):
+class ShortlistQueueView(GenericAPIView):
     permission_classes = [IsRecruiterOrAdmin]
 
     def get(self, request):
@@ -48,17 +49,18 @@ class ShortlistQueueView(APIView):
         return Response({"count": len(results), "results": results})
 
 
-class CandidateShortlistDecisionView(APIView):
+class CandidateShortlistDecisionView(GenericAPIView):
     permission_classes = [IsRecruiterOrAdmin]
+    serializer_class = ShortlistDecisionRequestSerializer
 
     def post(self, request, candidate_id):
         candidate = get_object_or_404(
             Candidate.objects.select_related("requisition"), public_id=candidate_id
         )
-        serializer = ShortlistDecisionRequestSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        evaluation = data["evaluation"]
+        evaluation = get_object_or_404(ResumeEvaluation, public_id=data["evaluation"])
 
         if evaluation.candidate_id != candidate.pk:
             raise exceptions.ValidationError({"evaluation": "The selected evaluation does not belong to this candidate."})
@@ -147,7 +149,7 @@ class CandidateShortlistDecisionView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
-class CandidateShortlistHistoryView(APIView):
+class CandidateShortlistHistoryView(GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, candidate_id):

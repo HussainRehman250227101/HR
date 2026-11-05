@@ -2,15 +2,11 @@
 
 from rest_framework import serializers
 
-from scoring.models import ResumeEvaluation
 from .models import ShortlistDecision, ShortlistReview
 
 
 class ShortlistDecisionRequestSerializer(serializers.Serializer):
-    evaluation = serializers.SlugRelatedField(
-        slug_field="public_id",
-        queryset=ResumeEvaluation.objects.all(),
-    )
+    evaluation = serializers.UUIDField(help_text="Public UUID of the candidate's latest AI evaluation.")
     decision = serializers.ChoiceField(choices=ShortlistDecision.choices)
     decision_reason = serializers.CharField(max_length=2000, trim_whitespace=True)
     score_override = serializers.IntegerField(required=False, allow_null=True, min_value=0, max_value=100)

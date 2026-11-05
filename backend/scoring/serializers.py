@@ -7,6 +7,7 @@ from .models import DEFAULT_SCORING_WEIGHTS, ResumeEvaluation, ScoringRubric
 
 class ScoringRubricSerializer(serializers.ModelSerializer):
     requisition_reference = serializers.UUIDField(source="requisition.reference_code", read_only=True)
+    weights = serializers.JSONField(required=True)
 
     class Meta:
         model = ScoringRubric
