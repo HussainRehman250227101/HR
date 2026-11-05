@@ -123,6 +123,12 @@ class CandidateEvent(models.Model):
         RESUME_EXTRACTION_FAILED = "RESUME_EXTRACTION_FAILED", "Resume Extraction Failed"
         RESUME_RETRY_QUEUED = "RESUME_RETRY_QUEUED", "Resume Retry Queued"
         STATUS_CHANGED = "STATUS_CHANGED", "Candidate Status Changed"
+        RESUME_SCORED = "RESUME_SCORED", "Resume Scored"
+        SHORTLIST_DECISION_RECORDED = "SHORTLIST_DECISION_RECORDED", "Shortlist Decision Recorded"
+        CANDIDATE_IDENTITY_REVIEWED = "CANDIDATE_IDENTITY_REVIEWED", "Candidate Identity Reviewed"
+        WORKFLOW_STARTED = "WORKFLOW_STARTED", "Workflow Started"
+        WORKFLOW_COMPLETED = "WORKFLOW_COMPLETED", "Workflow Completed"
+        WORKFLOW_FAILED = "WORKFLOW_FAILED", "Workflow Failed"
 
     candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE, related_name="events")
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="candidate_events")

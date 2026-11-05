@@ -10,3 +10,5 @@ openai==3.45.0
 pydantic==2.14.2
 pypdf==6.21.4
 python-docx==1.2.0
+langgraph==1.2.20
+langgraph-checkpoint-sqlite==3.1.3

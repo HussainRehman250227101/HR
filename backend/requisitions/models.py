@@ -46,6 +46,8 @@ class Requisition(models.Model):
     description = models.TextField()
     responsibilities = models.TextField(blank=True)
     required_skills = models.JSONField(default=list, blank=True)
+    preferred_skills = models.JSONField(default=list, blank=True)
+    screening_questions = models.JSONField(default=list, blank=True)
     minimum_experience_years = models.DecimalField(
         max_digits=4,
         decimal_places=1,

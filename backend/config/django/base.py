@@ -1,6 +1,7 @@
 """Shared Django settings for all deployment environments."""
 
 from pathlib import Path
+import os
 
 from config.env import BASE_DIR, env
 
@@ -24,6 +25,9 @@ INSTALLED_APPS = [
     "requisitions.apps.RequisitionsConfig",
     "candidates.apps.CandidatesConfig",
     "llm.apps.LLMConfig",
+    "scoring.apps.ScoringConfig",
+    "reviews.apps.ReviewsConfig",
+    "workflows.apps.WorkflowsConfig",
 ]
 
 MIDDLEWARE = [
@@ -126,6 +130,15 @@ AZURE_OPENAI_TIMEOUT_SECONDS = env.int("AZURE_OPENAI_TIMEOUT_SECONDS", default=3
 AZURE_OPENAI_MAX_RETRIES = env.int("AZURE_OPENAI_MAX_RETRIES", default=2)
 AZURE_OPENAI_REASONING_EFFORT = env("AZURE_OPENAI_REASONING_EFFORT", default="low") # type:ignore
 AZURE_OPENAI_MAX_COMPLETION_TOKENS = env.int("AZURE_OPENAI_MAX_COMPLETION_TOKENS", default=2000)
+
+# LangGraph SQLite checkpoints for durable local workflow state and human-review pauses.
+LANGGRAPH_CHECKPOINT_DB_PATH = Path(env(
+    "LANGGRAPH_CHECKPOINT_DB_PATH",
+    default=str(BASE_DIR / "langgraph-checkpoints.sqlite3"),
+))
+LANGGRAPH_STRICT_MSGPACK = env.bool("LANGGRAPH_STRICT_MSGPACK", default=True)
+if LANGGRAPH_STRICT_MSGPACK:
+    os.environ["LANGGRAPH_STRICT_MSGPACK"] = "true"
 
 # Private resume upload limits and Django multipart request limits.
 RESUME_MAX_FILE_SIZE_MB = env.int("RESUME_MAX_FILE_SIZE_MB", default=10)

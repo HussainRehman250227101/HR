@@ -1,0 +1,159 @@
+from django.test import TestCase
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient
+
+from accounts.models import User, UserRole
+from candidates.models import Candidate, CandidateStatus, ResumeDocument, ResumeProcessingStatus
+from requisitions.models import Requisition, RequisitionStatus
+from scoring.models import ConfidenceLevel, EvaluationRecommendation, ResumeEvaluation, ScoringRubric
+from .models import ShortlistDecision, ShortlistReview
+
+
+class ShortlistReviewTests(TestCase):
+    def setUp(self):
+        self.recruiter = User.objects.create_user(
+            username="review-recruiter", email="review@example.test",
+            password="Strong-Test-Password-123!", role=UserRole.RECRUITER,
+        )
+        self.manager = User.objects.create_user(
+            username="review-manager", email="manager-review@example.test",
+            password="Strong-Test-Password-123!", role=UserRole.HIRING_MANAGER,
+        )
+        self.requisition = Requisition.objects.create(
+            title="Controls Engineer", department="Engineering",
+            description="Controls role.", status=RequisitionStatus.OPEN,
+            created_by=self.recruiter, hiring_manager=self.manager,
+        )
+        self.candidate = Candidate.objects.create(
+            requisition=self.requisition, full_name="Review Candidate",
+            email="review-candidate@example.test", created_by=self.recruiter,
+            current_status=CandidateStatus.SCORED_HR_REVIEW,
+        )
+        self.rubric = ScoringRubric.objects.create(requisition=self.requisition)
+        self.evaluation = self._make_evaluation(self.candidate, "c" * 64, 82)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.recruiter)
+        self.url = reverse("reviews:candidate-shortlist-decision", args=[self.candidate.public_id])
+
+    def _make_evaluation(self, candidate, checksum, score):
+        document = ResumeDocument.objects.create(
+            candidate=candidate, file=f"resumes/{checksum[:4]}.docx",
+            original_filename="review.docx",
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            file_size=50, sha256=checksum, processing_status=ResumeProcessingStatus.COMPLETED,
+            extracted_text="Synthetic resume evidence.", created_by=self.recruiter,
+        )
+        return ResumeEvaluation.objects.create(
+            candidate=candidate, requisition=self.requisition,
+            resume_document=document, rubric=self.rubric, version=1,
+            overall_score=score, assessed_weight=100, criterion_scores={},
+            evidence={}, missing_or_unclear_items=[], parsing_warnings=[],
+            confidence_level=ConfidenceLevel.HIGH,
+            recommendation_for_human_review=EvaluationRecommendation.REVIEW_RECOMMENDED,
+            overall_assessment="Evidence summary.", model_version="hr-gpt-5-mini",
+            input_sha256=checksum, created_by=self.recruiter,
+        )
+
+    def test_recruiter_approval_advances_candidate_only_after_human_decision(self):
+        response = self.client.post(self.url, {
+            "evaluation": str(self.evaluation.public_id),
+            "decision": ShortlistDecision.APPROVE_FOR_SCREENING,
+            "decision_reason": "Recruiter reviewed supporting evidence.",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.candidate.refresh_from_db()
+        self.assertEqual(self.candidate.current_status, CandidateStatus.APPROVED_FOR_SCREENING)
+        self.assertEqual(ShortlistReview.objects.count(), 1)
+
+    def test_decline_requires_reason_and_closes_candidate(self):
+        response = self.client.post(self.url, {
+            "evaluation": str(self.evaluation.public_id),
+            "decision": ShortlistDecision.DECLINE, "decision_reason": "",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.post(self.url, {
+            "evaluation": str(self.evaluation.public_id),
+            "decision": ShortlistDecision.DECLINE,
+            "decision_reason": "Recruiter decision after review.",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.candidate.refresh_from_db()
+        self.assertEqual(self.candidate.current_status, CandidateStatus.CLOSED)
+        self.assertEqual(self.candidate.closed_reason, "Recruiter decision after review.")
+
+    def test_manual_score_override_requires_reason_and_preserves_ai_score(self):
+        response = self.client.post(self.url, {
+            "evaluation": str(self.evaluation.public_id),
+            "decision": ShortlistDecision.HOLD_FOR_REVIEW,
+            "decision_reason": "Need a second reviewer.",
+            "score_override": 90,
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.post(self.url, {
+            "evaluation": str(self.evaluation.public_id),
+            "decision": ShortlistDecision.HOLD_FOR_REVIEW,
+            "decision_reason": "Need a second reviewer.",
+            "score_override": 90,
+            "score_override_reason": "Manual evidence review changed the internal priority.",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.evaluation.refresh_from_db()
+        self.assertEqual(self.evaluation.overall_score, 82)
+        self.assertEqual(ShortlistReview.objects.get().score_override, 90)
+
+    def test_evaluation_from_another_candidate_is_rejected(self):
+        other = Candidate.objects.create(
+            requisition=self.requisition, full_name="Other",
+            email="other-review@example.test", created_by=self.recruiter,
+        )
+        other_evaluation = self._make_evaluation(other, "d" * 64, 70)
+        response = self.client.post(self.url, {
+            "evaluation": str(other_evaluation.public_id),
+            "decision": ShortlistDecision.APPROVE_FOR_SCREENING,
+            "decision_reason": "Approve.",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.candidate.refresh_from_db()
+        self.assertEqual(self.candidate.current_status, CandidateStatus.SCORED_HR_REVIEW)
+
+    def test_hiring_manager_cannot_make_shortlist_decision(self):
+        self.client.force_authenticate(user=self.manager)
+        response = self.client.post(self.url, {
+            "evaluation": str(self.evaluation.public_id),
+            "decision": ShortlistDecision.APPROVE_FOR_SCREENING,
+            "decision_reason": "Approve.",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_batch_identity_must_be_verified_with_candidate_contact_details(self):
+        self.candidate.identity_review_required = True
+        self.candidate.full_name = ""
+        self.candidate.email = None
+        self.candidate.phone = ""
+        self.candidate.save()
+        response = self.client.post(self.url, {
+            "evaluation": str(self.evaluation.public_id),
+            "decision": ShortlistDecision.APPROVE_FOR_SCREENING,
+            "decision_reason": "Approve.",
+            "identity_verified": True,
+            "identity_review_reason": "Checked against the submitted application.",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_recruiter_can_resolve_identity_and_approve_when_details_are_present(self):
+        self.candidate.identity_review_required = True
+        self.candidate.full_name = "Verified Candidate"
+        self.candidate.phone = "+923001234567"
+        self.candidate.save()
+        response = self.client.post(self.url, {
+            "evaluation": str(self.evaluation.public_id),
+            "decision": ShortlistDecision.APPROVE_FOR_SCREENING,
+            "decision_reason": "Reviewed resume and confirmed contact details.",
+            "identity_verified": True,
+            "identity_review_reason": "Candidate details confirmed by recruiter.",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.candidate.refresh_from_db()
+        self.assertFalse(self.candidate.identity_review_required)
+        self.assertEqual(self.candidate.current_status, CandidateStatus.APPROVED_FOR_SCREENING)

@@ -34,6 +34,8 @@ class RequisitionAPITests(APITestCase):
             "description": "Design, develop and support industrial control systems.",
             "responsibilities": "Own PLC and SCADA engineering deliverables.",
             "required_skills": ["PLC", "SCADA", "FAT"],
+            "preferred_skills": ["Python", "FactoryTalk"],
+            "screening_questions": ["Describe your PLC commissioning experience."],
             "minimum_experience_years": "5.0",
             "education_requirements": "Bachelor's degree in Engineering.",
             "salary_min": "200000.00",
@@ -71,6 +73,8 @@ class RequisitionAPITests(APITestCase):
         self.assertEqual(requisition.hiring_manager, self.manager)
         self.assertEqual(requisition.status, RequisitionStatus.DRAFT)
         self.assertTrue(response.data["reference_code"])
+        self.assertEqual(requisition.preferred_skills, ["Python", "FactoryTalk"])
+        self.assertEqual(requisition.screening_questions, ["Describe your PLC commissioning experience."])
 
     def test_hiring_manager_sees_only_assigned_requisitions(self):
         assigned = self.create_requisition()

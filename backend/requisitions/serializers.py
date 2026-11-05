@@ -19,9 +19,15 @@ class RequisitionSerializer(serializers.ModelSerializer):
     hiring_manager_name = serializers.SerializerMethodField()
     required_skills = serializers.ListField(
         child=serializers.CharField(max_length=80, trim_whitespace=True),
-        required=False,
-        allow_empty=True,
-        max_length=50,
+        required=False, allow_empty=True, max_length=50,
+    )
+    preferred_skills = serializers.ListField(
+        child=serializers.CharField(max_length=80, trim_whitespace=True),
+        required=False, allow_empty=True, max_length=50,
+    )
+    screening_questions = serializers.ListField(
+        child=serializers.CharField(max_length=500, trim_whitespace=True),
+        required=False, allow_empty=True, max_length=30,
     )
     minimum_experience_years = serializers.DecimalField(
         max_digits=4, decimal_places=1, min_value=0,
@@ -40,9 +46,10 @@ class RequisitionSerializer(serializers.ModelSerializer):
         fields = (
             "id", "reference_code", "title", "department", "location",
             "employment_type", "work_mode", "description", "responsibilities",
-            "required_skills", "minimum_experience_years", "education_requirements",
-            "salary_min", "salary_max", "currency", "headcount", "status",
-            "created_by", "created_by_name", "hiring_manager", "hiring_manager_name",
+            "required_skills", "preferred_skills", "screening_questions",
+            "minimum_experience_years", "education_requirements", "salary_min",
+            "salary_max", "currency", "headcount", "status", "created_by",
+            "created_by_name", "hiring_manager", "hiring_manager_name",
             "target_close_date", "opened_at", "closed_at", "created_at", "updated_at",
         )
         read_only_fields = (
@@ -60,6 +67,14 @@ class RequisitionSerializer(serializers.ModelSerializer):
             return None
         return obj.hiring_manager.get_full_name() or obj.hiring_manager.username
 
+    def _validate_unique_text_list(self, value, label):
+        cleaned = [item.strip() for item in value]
+        if any(not item for item in cleaned):
+            raise serializers.ValidationError(f"{label} cannot contain blank entries.")
+        if len({item.casefold() for item in cleaned}) != len(cleaned):
+            raise serializers.ValidationError(f"{label} must not contain duplicates.")
+        return cleaned
+
     def validate_currency(self, value):
         value = value.strip().upper()
         if len(value) != 3 or not value.isalpha():
@@ -67,12 +82,13 @@ class RequisitionSerializer(serializers.ModelSerializer):
         return value
 
     def validate_required_skills(self, value):
-        cleaned = [skill.strip() for skill in value]
-        if any(not skill for skill in cleaned):
-            raise serializers.ValidationError("Skills cannot be blank.")
-        if len({skill.casefold() for skill in cleaned}) != len(cleaned):
-            raise serializers.ValidationError("Required skills must not contain duplicates.")
-        return cleaned
+        return self._validate_unique_text_list(value, "Required skills")
+
+    def validate_preferred_skills(self, value):
+        return self._validate_unique_text_list(value, "Preferred skills")
+
+    def validate_screening_questions(self, value):
+        return self._validate_unique_text_list(value, "Screening questions")
 
     def validate(self, attrs):
         salary_min = attrs.get("salary_min", getattr(self.instance, "salary_min", None))
